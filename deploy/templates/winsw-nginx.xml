@@ -1,0 +1,24 @@
+<!-- =============================================================================
+ TGAWS-Nginx Windows 服务定义（WinSW 2.12.x，T-801）
+ 安装向导替换 @INSTALL_DIR@ 后复制到 {INSTALL_DIR}\nginx\ 下（与 nginx.exe 同目录）。
+ 停止走 nginx -s stop 优雅退出；崩溃 onfailure 5s 拉起。
+ ============================================================================= -->
+<service>
+  <id>TGAWS-Nginx</id>
+  <name>TGAWS-Nginx（反向代理+HTTPS 终结）</name>
+  <description>隧道地质灾害AI预警系统 Nginx（前端静态资源 + /api 反代 + HTTPS 自签证书）</description>
+  <executable>@INSTALL_DIR@\nginx\nginx.exe</executable>
+  <arguments>-p "@INSTALL_DIR@\nginx" -c conf\nginx.conf</arguments>
+  <workingdirectory>@INSTALL_DIR@\nginx</workingdirectory>
+  <startmode>Automatic</startmode>
+  <onfailure action="restart" delay="5 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>15 sec</stoptimeout>
+  <stopexecutable>@INSTALL_DIR@\nginx\nginx.exe</stopexecutable>
+  <stoparguments>-p "@INSTALL_DIR@\nginx" -c conf\nginx.conf -s stop</stoparguments>
+  <logpath>@INSTALL_DIR@\logs\nginx-winsw</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10485760</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+</service>

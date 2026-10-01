@@ -1,0 +1,24 @@
+<!-- =============================================================================
+ TGAWS-MySQL Windows 服务定义（WinSW 2.12.x，T-801）
+ 安装向导替换 @占位符@ 后复制到 {INSTALL_DIR}\mysql\ 下（与 mysqld.exe 同目录）。
+ 停止走 mysqladmin shutdown 优雅退出；崩溃 onfailure 10s 拉起（InnoDB 恢复需要时间）。
+ ============================================================================= -->
+<service>
+  <id>TGAWS-MySQL</id>
+  <name>TGAWS-MySQL（本地数据库）</name>
+  <description>隧道地质灾害AI预警系统本地 MySQL 8.0（绿色版，数据目录 @INSTALL_DIR@\mysql\data）</description>
+  <executable>@INSTALL_DIR@\mysql\bin\mysqld.exe</executable>
+  <arguments>--defaults-file=@INSTALL_DIR@\mysql\my.ini tgaws</arguments>
+  <workingdirectory>@INSTALL_DIR@\mysql\bin</workingdirectory>
+  <startmode>Automatic</startmode>
+  <onfailure action="restart" delay="10 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>60 sec</stoptimeout>
+  <stopexecutable>@INSTALL_DIR@\mysql\bin\mysqladmin.exe</stopexecutable>
+  <stoparguments>-uroot -p"@MYSQL_ROOT_PASSWORD@" --protocol=tcp -P@MYSQL_PORT@ shutdown</stoparguments>
+  <logpath>@INSTALL_DIR@\logs\mysql-winsw</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>20971520</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+</service>

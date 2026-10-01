@@ -1,0 +1,142 @@
+# =============================================================================
+# TGAWS 隧道地质灾害AI预警系统 — Nginx 1.26.x 部署配置（占位符模板）
+# 安装向导按《2.系统架构设计说明书》2.12.1 替换 @占位符@ 后生成实际配置：
+#   @INSTALL_DIR@ 安装根目录（绝对路径，必须 ASCII 字符——nginx 不支持非 ASCII 路径）
+#   @HTTP_PORT@   对外 HTTP 端口（仅 301 跳转 HTTPS，默认 80）
+#   @HTTPS_PORT@  对外 HTTPS 端口（默认 443）
+#   @APP_PORT@    后端应用端口（仅本机回环，默认 8080）
+# 口径（NFR-S5，2026-09-29 决策）：HTTPS 本期必做，自签证书/内网 CA，
+# 禁止 HTTP 降级——Service Worker/IndexedDB 仅在安全上下文可用（FR-104/FR-503 P0）。
+# 踩坑（W8 实测）：主级别 error_log/access_log/pid 按进程 CWD 解析相对路径，
+# WinSW 服务 CWD 不可控，故文件路径一律用 @INSTALL_DIR@ 绝对路径（/ 分隔）。
+# =============================================================================
+worker_processes  auto;
+
+error_log  @INSTALL_DIR@/nginx/logs/error.log  warn;
+pid        @INSTALL_DIR@/nginx/logs/nginx.pid;
+
+events {
+    worker_connections  2048;
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+    access_log  @INSTALL_DIR@/nginx/logs/access.log  main;
+
+    sendfile        on;
+    keepalive_timeout  65;
+    server_tokens   off;
+
+    gzip              on;
+    gzip_min_length   1k;
+    gzip_comp_level   6;
+    gzip_types        text/plain text/css application/javascript application/json
+                      image/svg+xml application/xml font/ttf font/otf;
+    gzip_vary         on;
+
+    # 后端应用（仅本机回环，不直接对外）
+    upstream tgaws_backend {
+        server 127.0.0.1:@APP_PORT@;
+        keepalive 16;
+    }
+
+    # ---------- HTTP :80 → 仅 301 跳转 HTTPS（禁止 HTTP 降级） ----------
+    server {
+        listen       @HTTP_PORT@;
+        server_name  _;
+
+        # 健康检查也走 HTTPS，不在此提供任何内容
+        return 301 https://$host:@HTTPS_PORT@$request_uri;
+    }
+
+    # ---------- HTTPS 主入口 ----------
+    server {
+        listen       @HTTPS_PORT@ ssl;
+        server_name  _;
+
+        ssl_certificate      @INSTALL_DIR@/nginx/conf/certs/server.crt;
+        ssl_certificate_key  @INSTALL_DIR@/nginx/conf/certs/server.key;
+        ssl_protocols        TLSv1.2 TLSv1.3;
+        ssl_ciphers          HIGH:!aNULL:!MD5:!RC4:!3DES;
+        ssl_prefer_server_ciphers  on;
+        ssl_session_cache    shared:SSL:10m;
+        ssl_session_timeout  10m;
+
+        # 上传大小（巡检/隐患照片，分片上传单块上限）
+        client_max_body_size 50m;
+        # 注：nginx add_header 继承规则——location 内一旦出现 add_header，
+        # server 级 add_header 即失效；安全头在下方各 location 内统一重复声明。
+
+        # ---------- 前端静态资源（vite build 产物） ----------
+        root  @INSTALL_DIR@/nginx/html;
+
+        # SPA 路由回退
+        location / {
+            try_files $uri $uri/ /index.html;
+            add_header X-Content-Type-Options nosniff always;
+            add_header X-Frame-Options SAMEORIGIN always;
+            add_header Referrer-Policy strict-origin-when-cross-origin always;
+            add_header Strict-Transport-Security "max-age=31536000" always;
+        }
+
+        # index.html / sw.js 禁用缓存，保证版本更新与 SW 更新即时生效
+        location = /index.html {
+            add_header Cache-Control "no-cache";
+            add_header X-Content-Type-Options nosniff always;
+            add_header X-Frame-Options SAMEORIGIN always;
+            add_header Referrer-Policy strict-origin-when-cross-origin always;
+            add_header Strict-Transport-Security "max-age=31536000" always;
+        }
+        location = /sw.js {
+            add_header Cache-Control "no-cache";
+            add_header X-Content-Type-Options nosniff always;
+            add_header X-Frame-Options SAMEORIGIN always;
+            add_header Referrer-Policy strict-origin-when-cross-origin always;
+            add_header Strict-Transport-Security "max-age=31536000" always;
+        }
+
+        # 带哈希的构建产物长缓存（单条 Cache-Control，避免 expires 双头）
+        location ~* \.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf)$ {
+            add_header Cache-Control "public, max-age=2592000, immutable";
+            add_header X-Content-Type-Options nosniff always;
+            add_header X-Frame-Options SAMEORIGIN always;
+            add_header Referrer-Policy strict-origin-when-cross-origin always;
+            add_header Strict-Transport-Security "max-age=31536000" always;
+        }
+
+        # ---------- 后端 REST 反代 ----------
+        location /api/ {
+            proxy_pass http://tgaws_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header Connection "";
+            proxy_connect_timeout 10s;
+            add_header X-Content-Type-Options nosniff always;
+            add_header X-Frame-Options SAMEORIGIN always;
+            add_header Referrer-Policy strict-origin-when-cross-origin always;
+            add_header Strict-Transport-Security "max-age=31536000" always;
+
+            # SSE（/api/v1/warn/stream）：关闭缓冲，长读超时 60min，
+            # Last-Event-ID 由客户端断线重连带在请求头上，nginx 透传即可
+            proxy_buffering off;
+            proxy_cache off;
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }
+
+        # 错误页兜底（前端 SPA 由 / 处理，此处防后端未启动时裸 502 页面）
+        error_page 502 503 504 /50x.html;
+        location = /50x.html {
+            root @INSTALL_DIR@/nginx/html;
+            internal;
+        }
+    }
+}

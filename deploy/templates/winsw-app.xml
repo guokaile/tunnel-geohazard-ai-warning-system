@@ -1,0 +1,35 @@
+<!-- =============================================================================
+ TGAWS-App Windows 服务定义（WinSW 2.12.x，T-801）
+ 安装向导替换 @占位符@ 后复制为 {INSTALL_DIR}\scripts\TGAWS-App.exe 同目录 XML：
+   @INSTALL_DIR@  安装根目录（ASCII 绝对路径）
+   @DB_URL@       jdbc:mysql://127.0.0.1:@MYSQL_PORT@/tgaws?...（向导生成）
+   @DB_USERNAME@ / @DB_PASSWORD@  应用库账号（向导初始化 tgaws 用户）
+   @JWT_SECRET@ / @CONFIG_ENC_KEY@  随机生成（安装时生成后写入，禁止明文硬编码）
+   @TCP_PORT@     TCP 采集接入端口（默认 9000）
+ 验收口径（T6）：kill 后 30s 内自动拉起——onfailure restart delay 5s。
+ ============================================================================= -->
+<service>
+  <id>TGAWS-App</id>
+  <name>TGAWS-App（隧道地质灾害AI预警系统后端）</name>
+  <description>隧道地质灾害AI预警系统 Java 后端服务（jlink 运行时 + tgaws-web.jar）</description>
+  <executable>@INSTALL_DIR@\jre\bin\java.exe</executable>
+  <arguments>-jar "@INSTALL_DIR@\app\tgaws-web.jar" --server.port=@APP_PORT@ --tgaws.access.tcp.port=@TCP_PORT@</arguments>
+  <startmode>Automatic</startmode>
+  <onfailure action="restart" delay="5 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>30 sec</stoptimeout>
+  <!-- 环境变量注入（敏感项来自安装向导；XML 位于安装目录，ACL 由安装器收紧） -->
+  <env name="DB_URL" value="@DB_URL@" />
+  <env name="DB_USERNAME" value="@DB_USERNAME@" />
+  <env name="DB_PASSWORD" value="@DB_PASSWORD@" />
+  <env name="JWT_SECRET" value="@JWT_SECRET@" />
+  <env name="CONFIG_ENC_KEY" value="@CONFIG_ENC_KEY@" />
+  <env name="RPT_DIR" value="@INSTALL_DIR@\reports" />
+  <env name="FILE_DIR" value="@INSTALL_DIR@\data\files" />
+  <!-- 日志：D 盘安装目录内（C 盘纪律）；size/keep 滚动 -->
+  <logpath>@INSTALL_DIR@\logs\app</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>20971520</sizeThreshold>
+    <keepFiles>10</keepFiles>
+  </log>
+</service>
