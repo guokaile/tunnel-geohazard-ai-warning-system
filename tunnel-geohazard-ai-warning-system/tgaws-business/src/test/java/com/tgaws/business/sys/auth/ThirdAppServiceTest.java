@@ -21,7 +21,7 @@ import static org.mockito.Mockito.when;
  */
 class ThirdAppServiceTest {
 
-    private static final String KEY = "dev-t2-key";
+    private static final String KEY = "test-only-enc-key"; // 单测自用密钥，无真实数据
 
     private ThirdAppMapper thirdAppMapper;
     private ThirdAppService service;
