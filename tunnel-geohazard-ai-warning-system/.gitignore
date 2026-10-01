@@ -41,3 +41,5 @@ out/
 *.msi
 scripts/t2a-run.sh
 scripts/t2a-restart-watcher.sh
+# Moquette 内嵌 MQTT 运行时数据（0.page 预分配页文件等，首次启动自动重建）
+tgaws-access/data/
