@@ -6,7 +6,7 @@
 
 | 层 | 技术 |
 | --- | --- |
-| 后端 | Java 17 + Spring Boot 3.x 模块化单体（`common` / `access` / `compute` / `business` / `web`） |
+| 后端 | Java 25 + Spring Boot  模块化单体（`common` / `access` / `compute` / `business` / `web`） |
 | 前端 | Vue 3 + TypeScript + Vite + Element Plus + ECharts |
 | 数据库 | MySQL 8（主库 `tgaws`，测试库 `tgaws_test`） |
 | 设备接入 | Netty TCP + 内嵌 MQTT（Moquette），网关 PSK 认证、密文凭据存储 |
