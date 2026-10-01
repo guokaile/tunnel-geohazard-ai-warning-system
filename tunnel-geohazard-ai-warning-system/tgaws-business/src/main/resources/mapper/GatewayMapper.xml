@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.mon.mapper.GatewayMapper">
+
+    <!-- 注册认证查询（启用网关；secret 为密文，由提供实现解密） -->
+    <select id="selectByCode" resultType="com.tgaws.business.mon.entity.GatewayEntity">
+        SELECT id, gateway_code AS gatewayCode, secret, status
+        FROM mon_gateway
+        WHERE gateway_code = #{gatewayCode}
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- 在线状态维护（心跳/离线扫描驱动） -->
+    <update id="updateOnlineStatus">
+        UPDATE mon_gateway
+        SET online_status = #{onlineStatus},
+            last_online_time = NOW()
+        WHERE gateway_code = #{gatewayCode}
+          AND is_deleted = 0
+    </update>
+
+</mapper>

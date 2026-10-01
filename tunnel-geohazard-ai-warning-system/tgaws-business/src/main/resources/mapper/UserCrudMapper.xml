@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.sys.mapper.UserCrudMapper">
+
+    <sql id="pageFilters">
+        AND u.is_deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (u.username LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.real_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.phone LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="status != null"> AND u.status = #{status} </if>
+        <if test="roleId != null">
+            AND EXISTS (SELECT 1 FROM sys_user_role ur
+                        WHERE ur.user_id = u.id AND ur.role_id = #{roleId} AND ur.is_deleted = 0)
+        </if>
+    </sql>
+
+    <select id="selectPage" resultType="com.tgaws.business.sys.entity.UserEntity">
+        SELECT u.id, u.username, u.real_name AS realName, u.phone, u.status,
+               u.pwd_update_time AS pwdUpdateTime
+        FROM sys_user u
+        WHERE 1 = 1
+        <include refid="pageFilters"/>
+        ORDER BY u.id
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*) FROM sys_user u WHERE 1 = 1
+        <include refid="pageFilters"/>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO sys_user (username, password, real_name, phone, status, pwd_update_time)
+        VALUES (#{username}, #{password}, #{realName}, #{phone}, #{status}, '1970-01-01 00:00:00')
+    </insert>
+
+    <update id="update">
+        UPDATE sys_user
+        SET real_name = #{realName}, phone = #{phone}
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <update id="updateStatus">
+        UPDATE sys_user SET status = #{status} WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <update id="updatePassword">
+        UPDATE sys_user SET password = #{password}, pwd_update_time = NOW() WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <update id="logicDelete">
+        UPDATE sys_user SET is_deleted = 1 WHERE id = #{id}
+    </update>
+
+    <select id="countUsersByRole" resultType="long">
+        SELECT COUNT(*) FROM sys_user_role WHERE role_id = #{roleId} AND is_deleted = 0
+    </select>
+
+    <update id="deleteUserRoles">
+        UPDATE sys_user_role SET is_deleted = 1 WHERE user_id = #{userId} AND is_deleted = 0
+    </update>
+
+    <insert id="insertUserRole">
+        INSERT INTO sys_user_role (user_id, role_id) VALUES (#{userId}, #{roleId})
+    </insert>
+</mapper>

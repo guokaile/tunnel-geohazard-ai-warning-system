@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.warn.mapper.TimelineMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO warn_event_timeline
+            (event_id, node_type, actor_type, actor_id, actor_name, action, detail, occur_time, create_time)
+        VALUES
+            (#{eventId}, #{nodeType}, #{actorType}, #{actorId}, #{actorName}, #{action}, #{detail}, #{occurTime}, NOW())
+    </insert>
+
+    <select id="selectByEvent" resultType="com.tgaws.business.warn.entity.TimelineEntity">
+        SELECT id, event_id AS eventId, node_type AS nodeType, actor_type AS actorType,
+               actor_id AS actorId, actor_name AS actorName, action, detail, occur_time AS occurTime
+        FROM warn_event_timeline
+        WHERE event_id = #{eventId}
+        ORDER BY occur_time, id
+    </select>
+
+</mapper>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.mon.mapper.LatestMapper">
+
+    <!-- 最新值 upsert（单行/点位） -->
+    <insert id="upsert">
+        INSERT INTO data_point_latest (point_id, value, ts, quality, source, update_time)
+        VALUES (#{row.pointId}, #{row.value}, #{row.ts}, #{row.quality}, #{row.source}, NOW())
+        ON DUPLICATE KEY UPDATE
+            value = VALUES(value),
+            ts = VALUES(ts),
+            quality = VALUES(quality),
+            source = VALUES(source)
+    </insert>
+
+</mapper>

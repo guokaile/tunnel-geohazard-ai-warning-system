@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.mon.mapper.MonQueryMapper">
+
+    <!-- 数据权限条件片段：scope=null 全部；空集合 1=0；否则 列 IN (参数化)（《6》6.3.6） -->
+    <sql id="scopeFilter">
+        <if test="scope != null and scope.empty"> AND 1=0 </if>
+        <if test="scope != null and !scope.empty">
+            AND ${scope.column} IN
+            <foreach collection="scope.params" item="p" open="(" separator="," close=")">#{p}</foreach>
+        </if>
+    </sql>
+
+    <!-- B01 隧道列表（启用+未删，数据范围按 prj_tunnel.id 过滤） -->
+    <select id="selectTunnels" resultType="com.tgaws.business.mon.entity.TunnelEntity">
+        SELECT id, tunnel_code AS tunnelCode, tunnel_name AS tunnelName, tunnel_type AS tunnelType,
+               stage, length_m AS lengthM, geo_desc AS geoDesc, status, start_date AS startDate, remark
+        FROM prj_tunnel
+        WHERE is_deleted = 0
+        <include refid="scopeFilter"/>
+        ORDER BY id
+    </select>
+
+    <!-- B03 断面列表（数据范围按 tunnel_id 过滤） -->
+    <select id="selectSections" resultType="com.tgaws.business.mon.entity.SectionEntity">
+        SELECT id, tunnel_id AS tunnelId, section_code AS sectionCode, section_name AS sectionName,
+               mileage_from AS mileageFrom, mileage_to AS mileageTo, geo_zone AS geoZone,
+               stage, status, sort
+        FROM prj_section
+        WHERE is_deleted = 0
+        <if test="tunnelId != null"> AND tunnel_id = #{tunnelId} </if>
+        <include refid="scopeFilter"/>
+        ORDER BY sort, id
+    </select>
+
+    <!-- B05 点位分页筛选片段 -->
+    <sql id="pointFilters">
+        AND p.is_deleted = 0
+        <if test="tunnelId != null"> AND p.tunnel_id = #{tunnelId} </if>
+        <if test="sectionId != null"> AND p.section_id = #{sectionId} </if>
+        <if test="hazardType != null"> AND p.hazard_type = #{hazardType} </if>
+        <if test="status != null"> AND p.enabled = #{status} </if>
+        <if test="keyword != null and keyword != ''">
+            AND (p.point_code LIKE CONCAT('%', #{keyword}, '%')
+                 OR p.point_name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <include refid="scopeFilter"/>
+    </sql>
+
+    <select id="selectPoints" resultType="com.tgaws.business.mon.entity.PointEntity">
+        SELECT p.id, p.point_code AS pointCode, p.point_name AS pointName, p.tunnel_id AS tunnelId,
+               p.section_id AS sectionId, p.hazard_type AS hazardType, p.item_type AS itemType,
+               p.unit, p.range_min AS rangeMin, p.range_max AS rangeMax, p.scale,
+               p.install_position AS installPosition, p.gateway_code AS gatewayCode,
+               p.protocol, p.collect_freq_sec AS collectFreqSec, p.collect_enabled AS collectEnabled,
+               p.enabled, p.online_status AS onlineStatus, p.last_data_time AS lastDataTime, p.remark
+        FROM mon_point p
+        WHERE 1 = 1
+        <include refid="pointFilters"/>
+        ORDER BY p.id
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countPoints" resultType="long">
+        SELECT COUNT(*) FROM mon_point p
+        WHERE 1 = 1
+        <include refid="pointFilters"/>
+    </select>
+
+    <select id="selectPointById" resultType="com.tgaws.business.mon.entity.PointEntity">
+        SELECT p.id, p.point_code AS pointCode, p.point_name AS pointName, p.tunnel_id AS tunnelId,
+               p.section_id AS sectionId, p.hazard_type AS hazardType, p.item_type AS itemType,
+               p.unit, p.range_min AS rangeMin, p.range_max AS rangeMax, p.scale,
+               p.install_position AS installPosition, p.gateway_code AS gatewayCode,
+               p.protocol, p.collect_freq_sec AS collectFreqSec, p.collect_enabled AS collectEnabled,
+               p.enabled, p.online_status AS onlineStatus, p.last_data_time AS lastDataTime, p.remark
+        FROM mon_point p
+        WHERE p.id = #{id} AND p.is_deleted = 0
+    </select>
+
+    <!-- B16 实时最新值：LEFT JOIN 未消警事件（1待确认/2已确认/3处置中/4待复核）取最高级别 -->
+    <select id="selectLatest" resultType="com.tgaws.business.mon.vo.MonQueryVos$PointLatestVo">
+        SELECT p.id AS pointId, p.point_code AS pointCode, p.point_name AS pointName,
+               p.tunnel_id AS tunnelId, t.tunnel_name AS tunnelName, p.section_id AS sectionId,
+               p.hazard_type AS hazardType, p.item_type AS itemType, p.unit,
+               l.value, l.ts, l.quality, p.online_status AS onlineStatus,
+               we.warn_level AS warnLevel
+        FROM mon_point p
+        JOIN prj_tunnel t ON t.id = p.tunnel_id AND t.is_deleted = 0
+        LEFT JOIN data_point_latest l ON l.point_id = p.id
+        LEFT JOIN (
+            SELECT point_id, MAX(warn_level) AS warn_level
+            FROM warn_event
+            WHERE warn_status IN (1, 2, 3, 4)
+            GROUP BY point_id
+        ) we ON we.point_id = p.id
+        WHERE p.is_deleted = 0 AND p.enabled = 1
+        <if test="tunnelId != null"> AND p.tunnel_id = #{tunnelId} </if>
+        <if test="sectionId != null"> AND p.section_id = #{sectionId} </if>
+        <if test="hazardType != null"> AND p.hazard_type = #{hazardType} </if>
+        <if test="keyword != null and keyword != ''">
+            AND (p.point_code LIKE CONCAT('%', #{keyword}, '%')
+                 OR p.point_name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <include refid="scopeFilter"/>
+        ORDER BY p.id
+    </select>
+
+    <!-- B17 原始粒度时序（data_sample，分区表按 ts 过滤走分区裁剪；limit 服务层控制） -->
+    <select id="selectSeriesRaw" resultType="com.tgaws.business.mon.vo.MonQueryVos$SeriesPointVo">
+        SELECT ts, value, quality
+        FROM data_sample
+        WHERE point_id = #{pointId} AND ts &gt;= #{fromTs} AND ts &lt;= #{toTs}
+        ORDER BY ts ASC
+        LIMIT #{limit}
+    </select>
+
+    <!-- B17 分钟粒度时序（窗口均值；quality 取整窗口聚合占比四舍五入不可行，置 0 由前端按 raw 处理） -->
+    <select id="selectSeriesMinute" resultType="com.tgaws.business.mon.vo.MonQueryVos$SeriesPointVo">
+        SELECT ts_minute AS ts, avg_value AS value, 0 AS quality
+        FROM data_sample_minute
+        WHERE point_id = #{pointId} AND ts_minute &gt;= #{fromTs} AND ts_minute &lt;= #{toTs}
+        ORDER BY ts_minute ASC
+    </select>
+
+    <!-- B18 统计聚合（max/min/avg；无样本返回 null 由服务层判空） -->
+    <select id="selectSeriesAgg" resultType="com.tgaws.business.mon.vo.MonQueryVos$PointStatsVo">
+        SELECT MAX(value) AS max, MIN(value) AS min, AVG(value) AS avg
+        FROM data_sample
+        WHERE point_id = #{pointId} AND ts &gt;= #{fromTs} AND ts &lt;= #{toTs}
+    </select>
+
+    <!-- B18 首末值（rate 由服务层按时间跨度计算，避免 SQL 除法除零口径分散；
+         窗口仅 1 条样本时首末为同一行，服务层去重后 rate=0） -->
+    <select id="selectSeriesFirstLast" resultType="com.tgaws.business.mon.vo.MonQueryVos$SeriesPointVo">
+        (SELECT ts, value, quality
+         FROM data_sample
+         WHERE point_id = #{pointId} AND ts &gt;= #{fromTs} AND ts &lt;= #{toTs}
+         ORDER BY ts ASC LIMIT 1)
+        UNION ALL
+        (SELECT ts, value, quality
+         FROM data_sample
+         WHERE point_id = #{pointId} AND ts &gt;= #{fromTs} AND ts &lt;= #{toTs}
+         ORDER BY ts DESC LIMIT 1)
+    </select>
+
+    <!-- B20 概览统计（数据范围过滤；今日样本数按分区键 ts 裁剪） -->
+    <select id="selectOverview" resultType="com.tgaws.business.mon.vo.MonQueryVos$OverviewVo">
+        SELECT
+            (SELECT COUNT(*) FROM mon_point p WHERE p.is_deleted = 0 AND p.enabled = 1
+             <if test="scope != null and scope.empty"> AND 1=0 </if>
+             <if test="scope != null and !scope.empty">
+                AND p.${scope.column} IN
+                <foreach collection="scope.params" item="p2" open="(" separator="," close=")">#{p2}</foreach>
+             </if>) AS totalPoints,
+            (SELECT COUNT(*) FROM mon_point p WHERE p.is_deleted = 0 AND p.enabled = 1
+             <if test="scope != null and scope.empty"> AND 1=0 </if>
+             <if test="scope != null and !scope.empty">
+                AND p.${scope.column} IN
+                <foreach collection="scope.params" item="p3" open="(" separator="," close=")">#{p3}</foreach>
+             </if> AND p.online_status = 1) AS onlinePoints,
+            (SELECT COUNT(*) FROM data_sample s
+             JOIN mon_point p ON p.id = s.point_id AND p.is_deleted = 0
+             <if test="scope != null and scope.empty"> AND 1=0 </if>
+             <if test="scope != null and !scope.empty">
+                AND p.${scope.column} IN
+                <foreach collection="scope.params" item="p4" open="(" separator="," close=")">#{p4}</foreach>
+             </if>
+             WHERE s.ts &gt;= #{todayStart}) AS todaySamples
+    </select>
+
+</mapper>

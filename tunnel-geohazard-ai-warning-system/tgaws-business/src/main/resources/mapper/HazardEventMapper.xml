@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.warn.mapper.HazardEventMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO warn_hazard_event
+            (hazard_no, tunnel_id, section_id, hazard_type, event_time, position, consequence,
+             level, relate_event_id, patrol_hazard_id, register_user_id, remark, create_time, update_time)
+        VALUES
+            (#{hazardNo}, #{tunnelId}, #{sectionId}, #{hazardType}, #{eventTime}, #{position},
+             #{consequence}, #{level}, #{relateEventId}, #{patrolHazardId}, #{registerUserId},
+             #{remark}, NOW(), NOW())
+    </insert>
+
+    <select id="selectById" resultType="com.tgaws.business.warn.entity.HazardEventEntity">
+        SELECT id, hazard_no AS hazardNo, tunnel_id AS tunnelId, section_id AS sectionId,
+               hazard_type AS hazardType, event_time AS eventTime, position, consequence,
+               level, relate_event_id AS relateEventId, patrol_hazard_id AS patrolHazardId,
+               register_user_id AS registerUserId, remark
+        FROM warn_hazard_event
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByTunnel" resultType="com.tgaws.business.warn.entity.HazardEventEntity">
+        SELECT id, hazard_no AS hazardNo, tunnel_id AS tunnelId, section_id AS sectionId,
+               hazard_type AS hazardType, event_time AS eventTime, position, consequence,
+               level, relate_event_id AS relateEventId, patrol_hazard_id AS patrolHazardId,
+               register_user_id AS registerUserId, remark
+        FROM warn_hazard_event
+        WHERE tunnel_id = #{tunnelId}
+        <if test="hazardType != null">
+          AND hazard_type = #{hazardType}
+        </if>
+        <if test="from != null">
+          AND event_time &gt;= #{from}
+        </if>
+        <if test="to != null">
+          AND event_time &lt;= #{to}
+        </if>
+        ORDER BY event_time DESC
+    </select>
+
+</mapper>

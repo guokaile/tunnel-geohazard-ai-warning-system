@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.sys.mapper.RoleMapper">
+
+    <select id="selectList" resultType="com.tgaws.business.sys.entity.RoleEntity">
+        SELECT id, role_code AS roleCode, role_name AS roleName, remark, status, data_scope AS dataScope, create_time AS createTime
+        FROM sys_role
+        WHERE is_deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (role_code LIKE CONCAT('%', #{keyword}, '%') OR role_name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY id
+    </select>
+
+    <select id="selectById" resultType="com.tgaws.business.sys.entity.RoleEntity">
+        SELECT id, role_code AS roleCode, role_name AS roleName, remark, status, data_scope AS dataScope, create_time AS createTime
+        FROM sys_role WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <select id="selectByCode" resultType="com.tgaws.business.sys.entity.RoleEntity">
+        SELECT id, role_code AS roleCode, role_name AS roleName, remark, status, data_scope AS dataScope, create_time AS createTime
+        FROM sys_role WHERE role_code = #{roleCode} AND is_deleted = 0
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO sys_role (role_code, role_name, remark, status, data_scope)
+        VALUES (#{roleCode}, #{roleName}, #{remark}, #{status}, #{dataScope})
+    </insert>
+
+    <update id="update">
+        UPDATE sys_role SET role_name = #{roleName}, remark = #{remark}, data_scope = #{dataScope}
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <update id="logicDelete">
+        UPDATE sys_role SET is_deleted = 1 WHERE id = #{id}
+    </update>
+
+    <select id="selectPermIdsByRole" resultType="long">
+        SELECT permission_id FROM sys_role_permission WHERE role_id = #{roleId} AND is_deleted = 0
+    </select>
+
+    <update id="deleteRolePerms">
+        UPDATE sys_role_permission SET is_deleted = 1 WHERE role_id = #{roleId} AND is_deleted = 0
+    </update>
+
+    <insert id="insertRolePerm">
+        INSERT INTO sys_role_permission (role_id, permission_id) VALUES (#{roleId}, #{permId})
+    </insert>
+</mapper>

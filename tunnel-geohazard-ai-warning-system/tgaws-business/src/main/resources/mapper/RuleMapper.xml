@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.mon.mapper.RuleMapper">
+
+    <select id="selectEnabledByItemType" resultType="com.tgaws.business.mon.entity.RuleEntity">
+        SELECT id, rule_code AS ruleCode, rule_type AS ruleType, warn_level AS warnLevel,
+               expression_json AS expressionJson, priority, status, item_type AS itemType
+        FROM mon_rule
+        WHERE status = 1
+          AND is_deleted = 0
+          AND (item_type = 0 OR item_type = #{itemType})
+        ORDER BY priority DESC
+    </select>
+
+
+    <!-- ==================== T-708 规则管理（版本化） ==================== -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO mon_rule (rule_code, rule_name, hazard_type, item_type, stage, section_id,
+                              rule_type, warn_level, expression_json, priority, version, status, remark, create_time, update_time)
+        VALUES (#{ruleCode}, #{ruleName}, #{hazardType}, #{itemType}, #{stage}, #{sectionId},
+                #{ruleType}, #{warnLevel}, #{expressionJson}, #{priority}, #{version}, #{status}, #{remark}, NOW(), NOW())
+    </insert>
+
+    <select id="selectById" resultType="com.tgaws.business.mon.entity.RuleEntity">
+        SELECT id, rule_code AS ruleCode, rule_name AS ruleName, hazard_type AS hazardType,
+               item_type AS itemType, stage, section_id AS sectionId, rule_type AS ruleType,
+               warn_level AS warnLevel, expression_json AS expressionJson, priority,
+               version, status, remark
+        FROM mon_rule WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <select id="selectLatestList" resultType="com.tgaws.business.mon.entity.RuleEntity">
+        SELECT r.id, r.rule_code AS ruleCode, r.rule_name AS ruleName, r.hazard_type AS hazardType,
+               r.item_type AS itemType, r.stage, r.section_id AS sectionId, r.rule_type AS ruleType,
+               r.warn_level AS warnLevel, r.expression_json AS expressionJson, r.priority,
+               r.version, r.status, r.remark
+        FROM mon_rule r
+        JOIN (SELECT rule_code, MAX(version) AS mv FROM mon_rule WHERE is_deleted = 0 GROUP BY rule_code) x
+          ON r.rule_code = x.rule_code AND r.version = x.mv
+        WHERE r.is_deleted = 0
+        <if test="hazardType != null"> AND r.hazard_type = #{hazardType} </if>
+        <if test="itemType != null"> AND r.item_type = #{itemType} </if>
+        <if test="status != null"> AND r.status = #{status} </if>
+        ORDER BY r.id
+    </select>
+
+    <select id="selectHistory" resultType="com.tgaws.business.mon.entity.RuleEntity">
+        SELECT id, rule_code AS ruleCode, rule_name AS ruleName, hazard_type AS hazardType,
+               item_type AS itemType, stage, section_id AS sectionId, rule_type AS ruleType,
+               warn_level AS warnLevel, expression_json AS expressionJson, priority,
+               version, status, remark
+        FROM mon_rule WHERE rule_code = #{ruleCode} AND is_deleted = 0 ORDER BY version DESC
+    </select>
+
+    <select id="countEventRefs" resultType="int">
+        SELECT COUNT(*) FROM warn_event WHERE rule_id = #{ruleId}
+    </select>
+
+    <update id="deleteByCode">
+        UPDATE mon_rule SET is_deleted = 1, update_time = NOW()
+        WHERE rule_code = #{ruleCode} AND is_deleted = 0
+    </update>
+
+    <update id="updateStatus">
+        UPDATE mon_rule SET status = #{status}, update_time = NOW()
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+</mapper>

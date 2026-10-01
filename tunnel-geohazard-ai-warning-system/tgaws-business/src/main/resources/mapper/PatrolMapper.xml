@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.patrol.mapper.PatrolMapper">
+
+    <!-- 数据权限条件片段（T-704：scope=null 全部；空集合命中零行 1=0；列名来自 DataScopeHelper 白名单） -->
+    <sql id="scopeFilter">
+        <if test="scope != null and scope.empty">
+          AND 1=0
+        </if>
+        <if test="scope != null and !scope.empty">
+          AND ${scope.column} IN
+          <foreach collection="scope.params" item="p" open="(" separator="," close=")">#{p}</foreach>
+        </if>
+    </sql>
+
+    <!-- ==================== 模板（版本化：uk_template_version(template_no, version)） ==================== -->
+    <insert id="insertTemplate" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO patrol_template (template_no, template_name, version, status, remark, create_time, update_time)
+        VALUES (#{templateNo}, #{templateName}, #{version}, #{status}, #{remark}, NOW(), NOW())
+    </insert>
+
+    <select id="selectTemplates" resultType="com.tgaws.business.patrol.entity.PatrolTemplateEntity">
+        SELECT t.id, t.template_no AS templateNo, t.template_name AS templateName,
+               t.version, t.status, t.remark
+        FROM patrol_template t
+        JOIN (SELECT template_no, MAX(version) AS mv
+              FROM patrol_template WHERE is_deleted = 0 GROUP BY template_no) x
+          ON t.template_no = x.template_no AND t.version = x.mv
+        WHERE t.is_deleted = 0
+        ORDER BY t.id
+    </select>
+
+    <select id="selectTemplate" resultType="com.tgaws.business.patrol.entity.PatrolTemplateEntity">
+        SELECT id, template_no AS templateNo, template_name AS templateName,
+               version, status, remark
+        FROM patrol_template WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <update id="deleteTemplateByNo">
+        UPDATE patrol_template SET is_deleted = 1, update_time = NOW()
+        WHERE template_no = #{templateNo} AND is_deleted = 0
+    </update>
+
+    <select id="countEnabledPlansRefTemplate" resultType="int">
+        SELECT COUNT(*) FROM patrol_plan
+        WHERE enabled = 1 AND is_deleted = 0
+          AND template_id IN (SELECT id FROM patrol_template WHERE template_no = #{templateNo})
+    </select>
+
+    <insert id="insertItem" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO patrol_template_item (template_id, item_name, check_content, judge_standard, sort, create_time, update_time)
+        VALUES (#{templateId}, #{itemName}, #{checkContent}, #{judgeStandard}, #{sort}, NOW(), NOW())
+    </insert>
+
+    <select id="selectItemsByTemplate" resultType="com.tgaws.business.patrol.entity.PatrolTemplateItemEntity">
+        SELECT id, template_id AS templateId, item_name AS itemName,
+               check_content AS checkContent, judge_standard AS judgeStandard, sort
+        FROM patrol_template_item
+        WHERE template_id = #{templateId} AND is_deleted = 0
+        ORDER BY sort, id
+    </select>
+
+    <!-- ==================== 计划 ==================== -->
+    <insert id="insertPlan" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO patrol_plan (plan_no, plan_name, tunnel_id, frequency_type, time_slot,
+                                 template_id, inspector_id, enabled, create_time, update_time)
+        VALUES (#{planNo}, #{planName}, #{tunnelId}, #{frequencyType}, #{timeSlot},
+                #{templateId}, #{inspectorId}, #{enabled}, NOW(), NOW())
+    </insert>
+
+    <select id="selectPlan" resultType="com.tgaws.business.patrol.entity.PatrolPlanEntity">
+        SELECT id, plan_no AS planNo, plan_name AS planName, tunnel_id AS tunnelId,
+               frequency_type AS frequencyType, time_slot AS timeSlot, template_id AS templateId,
+               inspector_id AS inspectorId, enabled
+        FROM patrol_plan WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <select id="selectPlans" resultType="com.tgaws.business.patrol.entity.PatrolPlanEntity">
+        SELECT id, plan_no AS planNo, plan_name AS planName, tunnel_id AS tunnelId,
+               frequency_type AS frequencyType, time_slot AS timeSlot, template_id AS templateId,
+               inspector_id AS inspectorId, enabled
+        FROM patrol_plan
+        WHERE is_deleted = 0
+        <if test="tunnelId != null">
+          AND tunnel_id = #{tunnelId}
+        </if>
+        <include refid="scopeFilter"/>
+        ORDER BY id
+    </select>
+
+    <!-- 不传=不变更（与 GatewayMapper update 同口径） -->
+    <update id="updatePlan">
+        UPDATE patrol_plan SET update_time = NOW()
+        <if test="planName != null">, plan_name = #{planName}</if>
+        <if test="tunnelId != null">, tunnel_id = #{tunnelId}</if>
+        <if test="frequencyType != null">, frequency_type = #{frequencyType}</if>
+        <if test="timeSlot != null">, time_slot = #{timeSlot}</if>
+        <if test="templateId != null">, template_id = #{templateId}</if>
+        <if test="inspectorId != null">, inspector_id = #{inspectorId}</if>
+        <if test="enabled != null">, enabled = #{enabled}</if>
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <update id="deletePlan">
+        UPDATE patrol_plan SET is_deleted = 1, update_time = NOW()
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <select id="selectEnabledPlans" resultType="com.tgaws.business.patrol.entity.PatrolPlanEntity">
+        SELECT id, plan_no AS planNo, plan_name AS planName, tunnel_id AS tunnelId,
+               frequency_type AS frequencyType, time_slot AS timeSlot, template_id AS templateId,
+               inspector_id AS inspectorId, enabled
+        FROM patrol_plan WHERE enabled = 1 AND is_deleted = 0
+    </select>
+
+    <!-- ==================== 任务 ==================== -->
+    <!-- uk_plan_time(plan_id, plan_time) 幂等：重复生成无操作返回已存在（评审 3.3 同口径） -->
+    <insert id="insertTask" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO patrol_task
+            (task_no, plan_id, tunnel_id, section_id, inspector_id, template_id, plan_time, status, create_time, update_time)
+        VALUES
+            (#{taskNo}, #{planId}, #{tunnelId}, #{sectionId}, #{inspectorId}, #{templateId}, #{planTime}, #{status}, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE id = id
+    </insert>
+
+    <select id="countTaskByPlanTime" resultType="int">
+        SELECT COUNT(*) FROM patrol_task
+        WHERE plan_id = #{planId} AND plan_time = #{planTime} AND is_deleted = 0
+    </select>
+
+    <select id="selectTask" resultType="com.tgaws.business.patrol.entity.PatrolTaskEntity">
+        SELECT id, task_no AS taskNo, plan_id AS planId, tunnel_id AS tunnelId,
+               section_id AS sectionId, inspector_id AS inspectorId, template_id AS templateId,
+               plan_time AS planTime, status, finish_time AS finishTime
+        FROM patrol_task WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <update id="updateTaskStatus">
+        UPDATE patrol_task SET status = #{status}, finish_time = NOW(), update_time = NOW()
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <update id="updateOverdue">
+        UPDATE patrol_task SET status = 4, update_time = NOW()
+        WHERE status = 1 AND plan_time &lt; #{now} AND is_deleted = 0
+    </update>
+
+    <select id="countTaskRecords" resultType="int">
+        SELECT COUNT(*) FROM patrol_record WHERE task_id = #{taskId} AND is_deleted = 0
+    </select>
+
+    <select id="countTemplateItems" resultType="int">
+        SELECT COUNT(*) FROM patrol_template_item WHERE template_id = #{templateId} AND is_deleted = 0
+    </select>
+
+    <select id="selectTasksByInspector" resultType="com.tgaws.business.patrol.entity.PatrolTaskEntity">
+        SELECT id, task_no AS taskNo, plan_id AS planId, tunnel_id AS tunnelId,
+               section_id AS sectionId, inspector_id AS inspectorId, template_id AS templateId,
+               plan_time AS planTime, status, finish_time AS finishTime
+        FROM patrol_task
+        WHERE inspector_id = #{inspectorId} AND is_deleted = 0
+        <if test="status != null">
+          AND status = #{status}
+        </if>
+        <include refid="scopeFilter"/>
+        ORDER BY plan_time DESC
+    </select>
+
+    <sql id="taskFilters">
+        AND is_deleted = 0
+        <if test="inspectorId != null">
+          AND inspector_id = #{inspectorId}
+        </if>
+        <if test="status != null">
+          AND status = #{status}
+        </if>
+        <if test="dateFrom != null">
+          AND plan_time &gt;= #{dateFrom}
+        </if>
+        <if test="dateTo != null">
+          AND plan_time &lt; #{dateTo}
+        </if>
+        <include refid="scopeFilter"/>
+    </sql>
+
+    <select id="selectTasksPage" resultType="com.tgaws.business.patrol.entity.PatrolTaskEntity">
+        SELECT id, task_no AS taskNo, plan_id AS planId, tunnel_id AS tunnelId,
+               section_id AS sectionId, inspector_id AS inspectorId, template_id AS templateId,
+               plan_time AS planTime, status, finish_time AS finishTime
+        FROM patrol_task
+        WHERE 1 = 1
+        <include refid="taskFilters"/>
+        ORDER BY plan_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countTasks" resultType="long">
+        SELECT COUNT(*) FROM patrol_task
+        WHERE 1 = 1
+        <include refid="taskFilters"/>
+    </select>
+
+    <!-- ==================== 记录（离线补传幂等：uk_client_key/uk_task_item 冲突返回已存在） ==================== -->
+    <insert id="insertRecord" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO patrol_record
+            (task_id, client_key, item_id, item_name, judge_standard_snapshot, result, description,
+             images, longitude, latitude, record_time, recorder_id, create_time, update_time)
+        VALUES
+            (#{taskId}, #{clientKey}, #{itemId}, #{itemName}, #{judgeStandardSnapshot},
+             #{result}, #{description}, #{images}, #{longitude}, #{latitude}, #{recordTime}, #{recorderId}, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE id = id
+    </insert>
+
+    <select id="selectRecordByClientKey" resultType="com.tgaws.business.patrol.entity.PatrolRecordEntity">
+        SELECT id, task_id AS taskId, client_key AS clientKey, item_id AS itemId,
+               item_name AS itemName, judge_standard_snapshot AS judgeStandardSnapshot,
+               result, description, images, longitude, latitude,
+               record_time AS recordTime, recorder_id AS recorderId
+        FROM patrol_record WHERE client_key = #{clientKey} AND is_deleted = 0 LIMIT 1
+    </select>
+
+    <select id="selectRecordsByTask" resultType="com.tgaws.business.patrol.entity.PatrolRecordEntity">
+        SELECT id, task_id AS taskId, client_key AS clientKey, item_id AS itemId,
+               item_name AS itemName, judge_standard_snapshot AS judgeStandardSnapshot,
+               result, description, images, longitude, latitude,
+               record_time AS recordTime, recorder_id AS recorderId
+        FROM patrol_record WHERE task_id = #{taskId} AND is_deleted = 0 ORDER BY id
+    </select>
+
+    <!-- ==================== 隐患 ==================== -->
+    <insert id="insertHazard" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO patrol_hazard
+            (hazard_no, tunnel_id, section_id, source, title, description, hazard_level, images,
+             status, handler_id, discover_user_id, discover_time, longitude, latitude,
+             task_id, record_id, hazard_type, create_time, update_time)
+        VALUES
+            (#{hazardNo}, #{tunnelId}, #{sectionId}, #{source}, #{title}, #{description},
+             #{hazardLevel}, #{images}, #{status}, #{handlerId}, #{discoverUserId}, NOW(),
+             #{longitude}, #{latitude}, #{taskId}, #{recordId}, #{hazardType}, NOW(), NOW())
+    </insert>
+
+    <select id="selectHazard" resultType="com.tgaws.business.patrol.entity.PatrolHazardEntity">
+        SELECT id, hazard_no AS hazardNo, tunnel_id AS tunnelId, section_id AS sectionId,
+               source, title, description, hazard_level AS hazardLevel, images, status,
+               handler_id AS handlerId, discover_user_id AS discoverUserId,
+               discover_time AS discoverTime, close_time AS closeTime, close_remark AS closeRemark,
+               longitude, latitude, task_id AS taskId, record_id AS recordId, hazard_type AS hazardType
+        FROM patrol_hazard WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <update id="updateHazardAssign">
+        UPDATE patrol_hazard SET handler_id = #{handlerId}, status = 2, update_time = NOW()
+        WHERE id = #{id} AND status IN (1, 2) AND is_deleted = 0
+    </update>
+
+    <update id="closeHazard">
+        UPDATE patrol_hazard
+        SET status = 3, close_time = #{closeTime}, close_remark = #{closeRemark}, update_time = NOW()
+        WHERE id = #{id} AND status IN (1, 2) AND is_deleted = 0
+    </update>
+
+    <sql id="hazardFilters">
+        AND is_deleted = 0
+        <if test="tunnelId != null">
+          AND tunnel_id = #{tunnelId}
+        </if>
+        <if test="status != null">
+          AND status = #{status}
+        </if>
+        <if test="hazardLevel != null">
+          AND hazard_level = #{hazardLevel}
+        </if>
+        <include refid="scopeFilter"/>
+    </sql>
+
+    <select id="selectHazardsPage" resultType="com.tgaws.business.patrol.entity.PatrolHazardEntity">
+        SELECT id, hazard_no AS hazardNo, tunnel_id AS tunnelId, section_id AS sectionId,
+               source, title, description, hazard_level AS hazardLevel, images, status,
+               handler_id AS handlerId, discover_user_id AS discoverUserId,
+               discover_time AS discoverTime, close_time AS closeTime, close_remark AS closeRemark,
+               longitude, latitude, task_id AS taskId, record_id AS recordId, hazard_type AS hazardType
+        FROM patrol_hazard
+        WHERE 1 = 1
+        <include refid="hazardFilters"/>
+        ORDER BY id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countHazards" resultType="long">
+        SELECT COUNT(*) FROM patrol_hazard
+        WHERE 1 = 1
+        <include refid="hazardFilters"/>
+    </select>
+
+</mapper>

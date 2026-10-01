@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.rpt.mapper.RptDashboardMapper">
+
+    <select id="countWarnByRange" resultType="long">
+        SELECT COUNT(*) FROM warn_event
+        WHERE tunnel_id = #{tunnelId}
+          AND create_time &gt;= #{from}
+        <if test="level != null">
+          AND warn_level = #{level}
+        </if>
+    </select>
+
+    <select id="countOpenEvents" resultType="long">
+        SELECT COUNT(*) FROM warn_event
+        WHERE tunnel_id = #{tunnelId} AND warn_status IN (1, 2, 3, 4)
+    </select>
+
+    <select id="countDisposeClosedByRange" resultType="long">
+        SELECT COUNT(*) FROM warn_dispose_task t
+        JOIN warn_event e ON e.id = t.event_id
+        WHERE e.tunnel_id = #{tunnelId} AND t.status = 3
+          AND t.finish_time &gt;= #{from} AND t.is_deleted = 0
+    </select>
+
+    <select id="countDisposeOpen" resultType="long">
+        SELECT COUNT(*) FROM warn_dispose_task t
+        JOIN warn_event e ON e.id = t.event_id
+        WHERE e.tunnel_id = #{tunnelId} AND t.status IN (1, 2) AND t.is_deleted = 0
+    </select>
+
+    <select id="gatewayStatus" resultType="map">
+        SELECT COUNT(*) AS total, SUM(online_status = 1) AS online
+        FROM mon_gateway WHERE status = 1 AND is_deleted = 0
+    </select>
+
+    <select id="topRiskPoints" resultType="map">
+        SELECT p.point_code AS pointCode, p.point_name AS pointName,
+               COUNT(*) AS cnt, MAX(e.warn_level) AS maxLevel
+        FROM warn_event e
+        JOIN mon_point p ON p.id = e.point_id AND p.is_deleted = 0
+        WHERE e.tunnel_id = #{tunnelId}
+          AND e.create_time &gt;= #{from}
+          AND e.warn_level &gt;= 3
+        GROUP BY p.id, p.point_code, p.point_name
+        ORDER BY cnt DESC, maxLevel DESC
+        LIMIT 10
+    </select>
+
+</mapper>

@@ -1,0 +1,18 @@
+# 集成测试环境（tgaws_test 测试库，与主库 tgaws 隔离；凭据经环境变量会话注入，不入库不入提交）
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DB_URL:jdbc:mysql://127.0.0.1:3306/tgaws_test?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+jwt:
+  secret: business-test-secret-key
+
+config:
+  enc:
+    key: business-test-enc-key

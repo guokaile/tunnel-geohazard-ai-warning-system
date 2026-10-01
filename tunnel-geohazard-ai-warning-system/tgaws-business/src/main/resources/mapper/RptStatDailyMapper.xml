@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.rpt.mapper.RptStatDailyMapper">
+
+    <!-- 重跑安全：uk_tunnel_date 冲突覆盖全部指标列（每日任务重跑/补数零副作用） -->
+    <insert id="upsert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO rpt_stat_daily
+            (tunnel_id, stat_date, warn_total, warn_red, warn_confirmed, warn_closed,
+             dispose_total, dispose_closed, patrol_total, patrol_done,
+             hazard_new, hazard_closed, sample_count, sample_expect, create_time, update_time)
+        VALUES
+            (#{tunnelId}, #{statDate}, #{warnTotal}, #{warnRed}, #{warnConfirmed}, #{warnClosed},
+             #{disposeTotal}, #{disposeClosed}, #{patrolTotal}, #{patrolDone},
+             #{hazardNew}, #{hazardClosed}, #{sampleCount}, #{sampleExpect}, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE
+            warn_total = VALUES(warn_total), warn_red = VALUES(warn_red),
+            warn_confirmed = VALUES(warn_confirmed), warn_closed = VALUES(warn_closed),
+            dispose_total = VALUES(dispose_total), dispose_closed = VALUES(dispose_closed),
+            patrol_total = VALUES(patrol_total), patrol_done = VALUES(patrol_done),
+            hazard_new = VALUES(hazard_new), hazard_closed = VALUES(hazard_closed),
+            sample_count = VALUES(sample_count), sample_expect = VALUES(sample_expect),
+            update_time = NOW()
+    </insert>
+
+    <select id="selectRange" resultType="com.tgaws.business.rpt.entity.RptStatDailyEntity">
+        SELECT id, tunnel_id AS tunnelId, stat_date AS statDate,
+               warn_total AS warnTotal, warn_red AS warnRed,
+               warn_confirmed AS warnConfirmed, warn_closed AS warnClosed,
+               dispose_total AS disposeTotal, dispose_closed AS disposeClosed,
+               patrol_total AS patrolTotal, patrol_done AS patrolDone,
+               hazard_new AS hazardNew, hazard_closed AS hazardClosed,
+               sample_count AS sampleCount, sample_expect AS sampleExpect
+        FROM rpt_stat_daily
+        WHERE stat_date BETWEEN #{from} AND #{to}
+        <if test="tunnelId != null">
+          AND tunnel_id = #{tunnelId}
+        </if>
+        <if test="scope != null and scope.empty">
+          AND 1=0
+        </if>
+        <if test="scope != null and !scope.empty">
+          AND ${scope.column} IN
+          <foreach collection="scope.params" item="p" open="(" separator="," close=")">#{p}</foreach>
+        </if>
+        ORDER BY stat_date
+    </select>
+
+    <select id="selectExistingDates" resultType="java.time.LocalDate">
+        SELECT DISTINCT stat_date FROM rpt_stat_daily
+        WHERE stat_date BETWEEN #{from} AND #{to}
+    </select>
+
+    <!-- ==================== 聚合源查询 ==================== -->
+
+    <select id="warnStatByTunnel" resultType="map">
+        SELECT tunnel_id AS tunnelId, COUNT(*) AS total,
+               SUM(warn_level = 4) AS red,
+               SUM(warn_status &gt;= 2 AND warn_status != 6) AS confirmed,
+               SUM(warn_status = 5) AS closed
+        FROM warn_event
+        WHERE create_time &gt;= #{from} AND create_time &lt; #{to}
+        GROUP BY tunnel_id
+    </select>
+
+    <select id="disposeStatByTunnel" resultType="map">
+        SELECT e.tunnel_id AS tunnelId, COUNT(*) AS total,
+               SUM(t.status = 3) AS closed
+        FROM warn_dispose_task t
+        JOIN warn_event e ON e.id = t.event_id
+        WHERE t.create_time &gt;= #{from} AND t.create_time &lt; #{to}
+          AND t.is_deleted = 0
+        GROUP BY e.tunnel_id
+    </select>
+
+    <select id="patrolStatByTunnel" resultType="map">
+        SELECT tunnel_id AS tunnelId, COUNT(*) AS total,
+               SUM(status = 3) AS done
+        FROM patrol_task
+        WHERE plan_time &gt;= #{from} AND plan_time &lt; #{to}
+          AND is_deleted = 0
+        GROUP BY tunnel_id
+    </select>
+
+    <select id="hazardStatByTunnel" resultType="map">
+        SELECT tunnel_id AS tunnelId,
+               SUM(discover_time &gt;= #{from} AND discover_time &lt; #{to}) AS newCnt,
+               SUM(close_time &gt;= #{from} AND close_time &lt; #{to}) AS closed
+        FROM patrol_hazard
+        WHERE ((discover_time &gt;= #{from} AND discover_time &lt; #{to})
+            OR (close_time &gt;= #{from} AND close_time &lt; #{to}))
+          AND is_deleted = 0
+        GROUP BY tunnel_id
+    </select>
+
+    <select id="sampleCountByPoint" resultType="map">
+        SELECT point_id AS pointId, COUNT(*) AS cnt
+        FROM data_sample
+        WHERE ts &gt;= #{from} AND ts &lt; #{to}
+        GROUP BY point_id
+    </select>
+
+    <select id="pointFreqByTunnel" resultType="map">
+        SELECT id AS pointId, tunnel_id AS tunnelId, collect_freq_sec AS freq
+        FROM mon_point
+        WHERE enabled = 1 AND collect_enabled = 1 AND is_deleted = 0
+    </select>
+
+</mapper>

@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: tgaws
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 敏感信息占位符（项目规则：密码/密钥一律环境变量注入，源码零硬编码）
+    # 部署时按《环境变量说明》设置 DB_URL / DB_USERNAME / DB_PASSWORD
+    url: ${DB_URL:jdbc:mysql://localhost:3306/tgaws?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:tgaws}
+    password: ${DB_PASSWORD:}
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+tgaws:
+  rpt:
+    # 分析报告落盘目录：默认项目根 ./reports；部署时经 RPT_DIR 环境变量覆盖（如 D 盘/挂载盘）
+    dir: ${RPT_DIR:./reports}

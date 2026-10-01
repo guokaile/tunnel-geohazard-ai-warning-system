@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.mon.mapper.SampleMapper">
+
+    <!-- 批量插入（主键 (point_id,ts) 天然去重 + ON DUPLICATE 幂等覆盖补传重放） -->
+    <insert id="batchInsert">
+        INSERT INTO data_sample (point_id, ts, value, quality, source, receive_time)
+        VALUES
+        <foreach collection="rows" item="r" separator=",">
+            (#{r.pointId}, #{r.ts}, #{r.value}, #{r.quality}, #{r.source}, #{r.receiveTime})
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            value = VALUES(value),
+            quality = VALUES(quality)
+    </insert>
+
+</mapper>

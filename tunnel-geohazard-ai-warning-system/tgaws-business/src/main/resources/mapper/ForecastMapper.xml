@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.ai.mapper.ForecastMapper">
+
+    <!-- 批量 upsert（uk_point_target(point_id,target_time,forecast_at) 幂等覆盖批算重跑；
+         model_id=0 为内置统计模型未注册占位） -->
+    <insert id="batchUpsert">
+        INSERT INTO ai_forecast
+            (point_id, model_id, forecast_at, target_time, forecast_value, lower_bound, upper_bound, create_time)
+        VALUES
+        <foreach collection="rows" item="r" separator=",">
+            (#{r.pointId}, #{r.modelId}, #{r.forecastAt}, #{r.targetTime},
+             #{r.forecastValue}, #{r.lowerBound}, #{r.upperBound}, NOW())
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            forecast_value = VALUES(forecast_value),
+            lower_bound = VALUES(lower_bound),
+            upper_bound = VALUES(upper_bound)
+    </insert>
+
+    <!-- 分批删除超期记录（90 天清理任务，防长事务） -->
+    <delete id="deleteBefore">
+        DELETE FROM ai_forecast
+        WHERE forecast_at &lt; #{forecastAt}
+        LIMIT #{limit}
+    </delete>
+
+</mapper>

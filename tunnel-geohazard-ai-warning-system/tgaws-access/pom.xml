@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.tgaws</groupId>
+        <artifactId>tgaws-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>tgaws-access</artifactId>
+    <name>tgaws-access</name>
+    <description>接入层：Netty TCP（帧编解码/注册认证）+ Moquette 内嵌 MQTT + 协议适配</description>
+    <properties>
+        <jacoco.branch.min>0.68</jacoco.branch.min>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.tgaws</groupId>
+            <artifactId>tgaws-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Netty：不写版本号，由 Boot BOM 统一管理（避免双 Netty 共存） -->
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-handler</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-codec</artifactId>
+        </dependency>
+        <!-- MQTT 编解码（Moquette 运行必需，随 Boot BOM 同版本） -->
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-codec-mqtt</artifactId>
+        </dependency>
+        <!-- 内嵌 MQTT Broker：排除传递 Netty（统一走 Boot BOM 版本，T3 验收必查单版本）
+             与 slf4j-reload4j（log4j 1.x 桥，与 Boot Logback 冲突） -->
+        <dependency>
+            <groupId>io.moquette</groupId>
+            <artifactId>moquette-broker</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.netty</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-reload4j</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>ch.qos.reload4j</groupId>
+                    <artifactId>reload4j</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- 测试 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- T3 验证：MQTT 测试客户端 -->
+        <dependency>
+            <groupId>org.eclipse.paho</groupId>
+            <artifactId>org.eclipse.paho.client.mqttv3</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

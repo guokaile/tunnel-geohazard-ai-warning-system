@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.warn.mapper.WarnEventMapper">
+
+    <!-- 未消警事件查询（B0306 去重抑制判断） -->
+    <select id="selectActiveByPoint" resultType="com.tgaws.business.warn.entity.WarnEventEntity">
+        SELECT id, event_no AS eventNo, tunnel_id AS tunnelId, point_id AS pointId,
+               hazard_type AS hazardType, item_type AS itemType, warn_level AS warnLevel,
+               warn_status AS warnStatus, gate_stage AS gateStage, trigger_time AS triggerTime
+        FROM warn_event
+        WHERE point_id = #{pointId}
+          AND warn_status IN (1, 2, 3, 4)
+        ORDER BY trigger_time DESC
+        LIMIT 1
+    </select>
+
+    <!-- 事件生成（gate_stage 影子标记独立字段；通知拦截在 NotifyService，W6） -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO warn_event
+            (event_no, tunnel_id, point_id, hazard_type, item_type, warn_level,
+             warn_title, warn_content, warn_status, gate_stage, trigger_time, create_time, update_time)
+        VALUES
+            (#{eventNo}, #{tunnelId}, #{pointId}, #{hazardType}, #{itemType}, #{warnLevel},
+             #{warnTitle}, #{warnContent}, #{warnStatus}, #{gateStage}, #{triggerTime}, NOW(), NOW())
+    </insert>
+
+    <!-- 确认/误报（条件更新=乐观并发控制，影响行数 0 → B0302） -->
+    <update id="updateOnConfirm">
+        UPDATE warn_event
+        SET warn_status = #{warnStatus},
+            confirm_user_id = #{confirmUserId},
+            confirm_result = #{confirmResult},
+            confirm_time = NOW(),
+            update_time = NOW()
+        WHERE id = #{id} AND warn_status = 1
+    </update>
+
+    <!-- 复核消警（期望状态 4；原因必填由服务层校验 B0304） -->
+    <update id="updateOnClose">
+        UPDATE warn_event
+        SET warn_status = 5,
+            close_user_id = #{closeUserId},
+            close_reason = #{closeReason},
+            close_time = NOW(),
+            update_time = NOW()
+        WHERE id = #{id} AND warn_status = 4
+    </update>
+
+    <update id="updateLevelUp">
+        UPDATE warn_event
+        SET warn_level = #{newLevel}, update_time = NOW()
+        WHERE id = #{id} AND warn_level &lt; #{newLevel} AND warn_status IN (1, 2, 3)
+    </update>
+
+    <update id="updateLevelDown">
+        UPDATE warn_event
+        SET warn_level = #{newLevel}, update_time = NOW()
+        WHERE id = #{id} AND warn_level &gt; #{newLevel} AND warn_status IN (1, 2, 3)
+    </update>
+
+    <update id="updateHazardLink">
+        UPDATE warn_event
+        SET hazard_event_id = #{hazardEventId}, update_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateToDisposing">
+        UPDATE warn_event SET warn_status = 3, update_time = NOW()
+        WHERE id = #{id} AND warn_status IN (2, 3)
+    </update>
+
+    <update id="updateToPendingReview">
+        UPDATE warn_event SET warn_status = 4, update_time = NOW()
+        WHERE id = #{id} AND warn_status = 3
+    </update>
+
+    <select id="selectById" resultType="com.tgaws.business.warn.entity.WarnEventEntity">
+        SELECT id, event_no AS eventNo, tunnel_id AS tunnelId, point_id AS pointId,
+               hazard_type AS hazardType, item_type AS itemType, warn_level AS warnLevel,
+               warn_status AS warnStatus, gate_stage AS gateStage, trigger_time AS triggerTime,
+               trigger_value AS triggerValue, hazard_event_id AS hazardEventId
+        FROM warn_event
+        WHERE id = #{id}
+    </select>
+
+    <!-- ==================== T-708 API-C01/C04 ==================== -->
+    <sql id="eventFilters">
+        <if test="tunnelId != null"> AND tunnel_id = #{tunnelId} </if>
+        <if test="level != null"> AND warn_level = #{level} </if>
+        <if test="status != null"> AND warn_status = #{status} </if>
+        <if test="hazardType != null"> AND hazard_type = #{hazardType} </if>
+        <if test="keyword != null and keyword != ''">
+          AND (event_no LIKE CONCAT('%', #{keyword}, '%') OR warn_title LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="from != null"> AND create_time &gt;= #{from} </if>
+        <if test="to != null"> AND create_time &lt; #{to} </if>
+        <if test="scope != null and scope.empty"> AND 1=0 </if>
+        <if test="scope != null and !scope.empty">
+          AND ${scope.column} IN
+          <foreach collection="scope.params" item="p" open="(" separator="," close=")">#{p}</foreach>
+        </if>
+    </sql>
+
+    <select id="selectPage" resultType="com.tgaws.business.warn.entity.WarnEventEntity">
+        SELECT id, event_no AS eventNo, tunnel_id AS tunnelId, section_id AS sectionId,
+               point_id AS pointId, hazard_type AS hazardType, item_type AS itemType,
+               warn_level AS warnLevel, warn_title AS warnTitle, warn_content AS warnContent,
+               rule_id AS ruleId, trigger_value AS triggerValue, trigger_time AS triggerTime,
+               warn_status AS warnStatus, gate_stage AS gateStage, hazard_event_id AS hazardEventId,
+               create_time AS createTime
+        FROM warn_event
+        WHERE 1 = 1
+        <include refid="eventFilters"/>
+        ORDER BY id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*) FROM warn_event
+        WHERE 1 = 1
+        <include refid="eventFilters"/>
+    </select>
+
+    <select id="stats" resultType="map">
+        SELECT tunnel_id AS tunnelId, warn_level AS level, hazard_type AS hazardType, COUNT(*) AS cnt
+        FROM warn_event
+        WHERE create_time &gt;= #{from} AND create_time &lt; #{to}
+        <if test="scope != null and scope.empty"> AND 1=0 </if>
+        <if test="scope != null and !scope.empty">
+          AND ${scope.column} IN
+          <foreach collection="scope.params" item="p" open="(" separator="," close=")">#{p}</foreach>
+        </if>
+        GROUP BY tunnel_id, warn_level, hazard_type
+    </select>
+
+
+</mapper>

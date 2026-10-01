@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.sys.mapper.OperLogMapper">
+
+    <select id="selectLastHash" resultType="string">
+        SELECT audit_hash FROM sys_oper_log ORDER BY id DESC LIMIT 1
+    </select>
+
+    <!-- 仅追加：本 Mapper 无 update/delete（8.8 S-08 防篡改，REVOKE 见补丁 t703） -->
+    <insert id="insert">
+        INSERT INTO sys_oper_log
+            (user_id, username, module, operation, method, request_params,
+             response_code, cost_ms, ip, oper_time, audit_hash, create_time)
+        VALUES
+            (#{userId}, #{username}, #{module}, #{operation}, #{method}, #{requestParams},
+             #{responseCode}, #{costMs}, #{ip}, #{operTime}, #{auditHash}, NOW())
+    </insert>
+
+</mapper>

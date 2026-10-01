@@ -1,0 +1,17 @@
+# 测试环境整体覆盖主配置：H2（MySQL 兼容模式），不依赖本机 MySQL 口令
+spring:
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:tgaws_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password: ""
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+jwt:
+  secret: web-test-secret-key
+config:
+  enc:
+    key: web-test-enc-key

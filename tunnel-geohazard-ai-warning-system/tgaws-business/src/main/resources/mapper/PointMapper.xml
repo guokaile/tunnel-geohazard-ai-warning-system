@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.mon.mapper.PointMapper">
+
+    <!-- 按点位编码查启用点位 id（IPointResolver 契约实现） -->
+    <select id="selectIdByCode" resultType="java.lang.Long">
+        SELECT id
+        FROM mon_point
+        WHERE point_code = #{pointCode}
+          AND is_deleted = 0
+          AND enabled = 1
+        LIMIT 1
+    </select>
+
+    <!-- 点位基础信息（判定编排：隧道/监测对象/测项） -->
+    <select id="selectBasicById" resultType="com.tgaws.business.mon.entity.PointBasicEntity">
+        SELECT id, point_code AS pointCode, point_name AS pointName,
+               tunnel_id AS tunnelId, hazard_type AS hazardType, item_type AS itemType
+        FROM mon_point
+        WHERE id = #{pointId}
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+</mapper>

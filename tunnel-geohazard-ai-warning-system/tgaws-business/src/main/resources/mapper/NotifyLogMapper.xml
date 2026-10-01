@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.warn.mapper.NotifyLogMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO warn_notify_log
+            (event_id, channel_type, target, content, status, deliver_state, attempt_count, send_time, create_time, update_time)
+        VALUES
+            (#{eventId}, #{channelType}, #{target}, #{content}, 3, 0, 0, NOW(), NOW(), NOW())
+    </insert>
+
+    <select id="selectPending" resultType="com.tgaws.business.warn.entity.NotifyLogEntity">
+        SELECT id, event_id AS eventId, channel_type AS channelType, target, content,
+               status, deliver_state AS deliverState, attempt_count AS attemptCount,
+               next_retry_time AS nextRetryTime, fail_reason AS failReason
+        FROM warn_notify_log
+        WHERE deliver_state IN (0, 2)
+          AND (next_retry_time IS NULL OR next_retry_time &lt;= #{now})
+        ORDER BY id
+        LIMIT #{limit}
+    </select>
+
+    <!-- 领取候选（评审 3.3：FOR UPDATE SKIP LOCKED 防并发/重入重复投递；须在事务内调用） -->
+    <select id="selectPendingForUpdate" resultType="com.tgaws.business.warn.entity.NotifyLogEntity">
+        SELECT id, event_id AS eventId, channel_type AS channelType, target, content,
+               status, deliver_state AS deliverState, attempt_count AS attemptCount,
+               next_retry_time AS nextRetryTime, fail_reason AS failReason
+        FROM warn_notify_log
+        WHERE deliver_state IN (0, 2)
+          AND (next_retry_time IS NULL OR next_retry_time &lt;= #{now})
+        ORDER BY id
+        LIMIT #{limit}
+        FOR UPDATE SKIP LOCKED
+    </select>
+
+    <update id="markClaimed">
+        UPDATE warn_notify_log
+        SET next_retry_time = #{nextRetryTime}, update_time = NOW()
+        WHERE id = #{id} AND deliver_state IN (0, 2)
+    </update>
+
+    <select id="countDeliveredByEvent" resultType="int">
+        SELECT COUNT(*) FROM warn_notify_log
+        WHERE event_id = #{eventId} AND deliver_state = 1
+    </select>
+
+    <update id="updateAfterAttempt">
+        UPDATE warn_notify_log
+        SET status = #{status},
+            deliver_state = #{deliverState},
+            attempt_count = #{attemptCount},
+            next_retry_time = #{nextRetryTime},
+            fail_reason = #{failReason},
+            update_time = NOW()
+        WHERE id = #{id}
+          AND deliver_state IN (0, 2)
+    </update>
+
+    <update id="updateDelivered">
+        UPDATE warn_notify_log
+        SET status = 1, deliver_state = 1, update_time = NOW()
+        WHERE id = #{id}
+          AND deliver_state IN (0, 2)
+    </update>
+
+    <select id="countPending" resultType="int">
+        SELECT COUNT(*) FROM warn_notify_log WHERE deliver_state IN (0, 2)
+    </select>
+
+    <select id="oldestPendingTime" resultType="java.time.LocalDateTime">
+        SELECT MIN(next_retry_time) FROM warn_notify_log WHERE deliver_state IN (0, 2)
+    </select>
+
+    <select id="selectByFilter" resultType="com.tgaws.business.warn.entity.NotifyLogEntity">
+        SELECT id, event_id AS eventId, channel_type AS channelType, target, content, status,
+               deliver_state AS deliverState, attempt_count AS attemptCount, send_time AS sendTime
+        FROM warn_notify_log
+        WHERE event_id = #{eventId}
+        <if test="channelType != null"> AND channel_type = #{channelType} </if>
+        <if test="from != null"> AND send_time &gt;= #{from} </if>
+        <if test="to != null"> AND send_time &lt; #{to} </if>
+        ORDER BY id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countByFilter" resultType="long">
+        SELECT COUNT(*) FROM warn_notify_log
+        WHERE event_id = #{eventId}
+        <if test="channelType != null"> AND channel_type = #{channelType} </if>
+        <if test="from != null"> AND send_time &gt;= #{from} </if>
+        <if test="to != null"> AND send_time &lt; #{to} </if>
+    </select>
+
+
+</mapper>

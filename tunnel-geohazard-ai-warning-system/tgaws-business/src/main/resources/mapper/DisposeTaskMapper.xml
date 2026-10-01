@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.warn.mapper.DisposeTaskMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO warn_dispose_task
+            (task_no, event_id, assignee_id, assigner_id, measure, deadline, status, create_time, update_time)
+        VALUES
+            (#{taskNo}, #{eventId}, #{assigneeId}, #{assignerId}, #{measure}, #{deadline}, #{status}, NOW(), NOW())
+    </insert>
+
+    <select id="selectById" resultType="com.tgaws.business.warn.entity.DisposeTaskEntity">
+        SELECT id, task_no AS taskNo, event_id AS eventId, assignee_id AS assigneeId,
+               assigner_id AS assignerId, measure, deadline, status, finish_time AS finishTime
+        FROM warn_dispose_task
+        WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <update id="updateOnStart">
+        UPDATE warn_dispose_task SET status = 2, update_time = NOW()
+        WHERE id = #{id} AND status = 1
+    </update>
+
+    <update id="updateOnFinish">
+        UPDATE warn_dispose_task
+        SET status = 3, finish_time = NOW(), update_time = NOW()
+        WHERE id = #{id} AND status = 2
+    </update>
+
+    <update id="markOverdue">
+        UPDATE warn_dispose_task
+        SET status = 4, update_time = NOW()
+        WHERE status IN (1, 2) AND deadline &lt; #{now} AND is_deleted = 0
+    </update>
+
+    <select id="selectByAssignee" resultType="com.tgaws.business.warn.entity.DisposeTaskEntity">
+        SELECT id, task_no AS taskNo, event_id AS eventId, assignee_id AS assigneeId,
+               assigner_id AS assignerId, measure, deadline, status, finish_time AS finishTime
+        FROM warn_dispose_task
+        WHERE assignee_id = #{assigneeId} AND is_deleted = 0
+        <if test="status != null">
+          AND status = #{status}
+        </if>
+        ORDER BY deadline
+    </select>
+
+    <!-- ==================== T-708 API-C16/C18 ==================== -->
+    <sql id="taskFilters">
+        AND is_deleted = 0
+        <if test="assigneeId != null"> AND assignee_id = #{assigneeId} </if>
+        <if test="status != null"> AND status = #{status} </if>
+        <if test="scope != null and scope.empty"> AND 1=0 </if>
+        <if test="scope != null and !scope.empty">
+          AND e.tunnel_id IN
+          <foreach collection="scope.params" item="p" open="(" separator="," close=")">#{p}</foreach>
+        </if>
+    </sql>
+
+    <select id="selectPage" resultType="com.tgaws.business.warn.entity.DisposeTaskEntity">
+        SELECT t.id, t.task_no AS taskNo, t.event_id AS eventId, t.assignee_id AS assigneeId,
+               t.assigner_id AS assignerId, t.measure, t.deadline, t.status, t.finish_time AS finishTime
+        FROM warn_dispose_task t
+        JOIN warn_event e ON e.id = t.event_id
+        WHERE 1 = 1
+        <include refid="taskFilters"/>
+        ORDER BY t.id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*) FROM warn_dispose_task t
+        JOIN warn_event e ON e.id = t.event_id
+        WHERE 1 = 1
+        <include refid="taskFilters"/>
+    </select>
+
+    <insert id="insertFeedback" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO warn_dispose_feedback (task_id, feedback_user_id, content, images, feedback_time, create_time, update_time)
+        VALUES (#{taskId}, #{feedbackUserId}, #{content}, #{images}, NOW(), NOW(), NOW())
+    </insert>
+
+    <select id="selectFeedbackByTask" resultType="com.tgaws.business.warn.entity.DisposeFeedbackEntity">
+        SELECT id, task_id AS taskId, feedback_user_id AS feedbackUserId,
+               content, images, feedback_time AS feedbackTime
+        FROM warn_dispose_feedback
+        WHERE task_id = #{taskId} AND is_deleted = 0
+        ORDER BY id
+    </select>
+
+
+</mapper>

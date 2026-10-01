@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.sys.mapper.UserMapper">
+
+    <select id="selectByUsername" resultType="com.tgaws.business.sys.entity.UserEntity">
+        SELECT id, username, password, real_name AS realName, phone, status,
+               pwd_update_time AS pwdUpdateTime
+        FROM sys_user
+        WHERE username = #{username}
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <select id="selectById" resultType="com.tgaws.business.sys.entity.UserEntity">
+        SELECT id, username, password, real_name AS realName, phone, status,
+               pwd_update_time AS pwdUpdateTime
+        FROM sys_user
+        WHERE id = #{id}
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <update id="updatePassword">
+        UPDATE sys_user SET password = #{password}, pwd_update_time = NOW() WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <!-- 管理员口令注入：仅当 pwd_update_time 仍为 1970-01-01 占位态时更新（幂等）。
+         pwd_update_time 置 NOW()：登录流程对 1970 态直接抛 C0005 且不发 token，
+         而改密接口需 Bearer 认证——保持 1970 会造成首次登录死锁。 -->
+    <update id="updateAdminPasswordIfUntouched">
+        UPDATE sys_user
+        SET password = #{password}, pwd_update_time = NOW()
+        WHERE username = 'admin'
+          AND is_deleted = 0
+          AND pwd_update_time = '1970-01-01 00:00:00'
+    </update>
+
+    <update id="updateLoginInfo">
+        UPDATE sys_user
+        SET last_login_time = #{loginTime}, last_login_ip = #{ip}
+        WHERE id = #{id}
+    </update>
+
+    <insert id="insertLoginLog">
+        INSERT INTO sys_login_log (user_id, username, login_type, result, fail_reason, ip, login_time, create_time)
+        VALUES (#{userId}, #{username}, #{loginType}, #{result}, #{failReason}, #{ip}, NOW(), NOW())
+    </insert>
+
+    <!-- ==================== T-701 授权装载 ==================== -->
+    <select id="selectPermissionsByUser" resultType="string">
+        SELECT p.perm_code
+        FROM sys_user_role ur
+        JOIN sys_role_permission rp ON rp.role_id = ur.role_id AND rp.is_deleted = 0
+        JOIN sys_permission p ON p.id = rp.permission_id AND p.is_deleted = 0
+        WHERE ur.user_id = #{userId} AND ur.is_deleted = 0
+    </select>
+
+    <select id="selectRoleCodesByUser" resultType="string">
+        SELECT r.role_code
+        FROM sys_user_role ur
+        JOIN sys_role r ON r.id = ur.role_id AND r.is_deleted = 0
+        WHERE ur.user_id = #{userId} AND ur.is_deleted = 0
+    </select>
+
+    <select id="selectTunnelIdsByUser" resultType="long">
+        SELECT rt.tunnel_id
+        FROM sys_user_role ur
+        JOIN sys_role_tunnel rt ON rt.role_id = ur.role_id AND rt.is_deleted = 0
+        WHERE ur.user_id = #{userId} AND ur.is_deleted = 0
+    </select>
+
+    <select id="selectMaxDataScopeByUser" resultType="integer">
+        SELECT MIN(r.data_scope)
+        FROM sys_user_role ur
+        JOIN sys_role r ON r.id = ur.role_id AND r.is_deleted = 0
+        WHERE ur.user_id = #{userId} AND ur.is_deleted = 0
+    </select>
+
+</mapper>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.ai.mapper.MinuteQueryMapper">
+
+    <select id="selectWindowForAllPoints" resultType="com.tgaws.business.ai.entity.MinuteRow">
+        SELECT point_id AS pointId, ts_minute AS tsMinute, avg_value AS avgValue
+        FROM data_sample_minute
+        WHERE ts_minute >= #{fromTs}
+        ORDER BY point_id, ts_minute
+    </select>
+
+</mapper>

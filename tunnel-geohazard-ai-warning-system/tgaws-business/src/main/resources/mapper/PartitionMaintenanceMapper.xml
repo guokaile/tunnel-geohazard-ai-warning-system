@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.data.mapper.PartitionMaintenanceMapper">
+
+    <!-- ${table}/${partition} 仅来自服务层白名单与日期生成（pYYYYMM），无外部输入 -->
+    <update id="reorganizePmax">
+        ALTER TABLE `${table}` REORGANIZE PARTITION pmax INTO (
+            PARTITION `${partition}` VALUES LESS THAN ('${boundary}'),
+            PARTITION pmax VALUES LESS THAN (MAXVALUE)
+        )
+    </update>
+
+    <update id="dropPartition">
+        ALTER TABLE `${table}` DROP PARTITION `${partition}`
+    </update>
+
+    <select id="partitionRowCount" resultType="long">
+        SELECT COUNT(*) FROM `${table}` PARTITION (`${partition}`)
+    </select>
+
+    <select id="partitionsOf" resultType="map">
+        SELECT PARTITION_NAME AS name,
+               PARTITION_DESCRIPTION AS boundary,
+               TABLE_ROWS AS rowCount
+        FROM information_schema.PARTITIONS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = #{table}
+          AND PARTITION_NAME IS NOT NULL
+        ORDER BY PARTITION_ORDINAL_POSITION
+    </select>
+
+    <insert id="insertArchiveLog">
+        INSERT INTO data_archive_log (table_name, partition_name, action, boundary_time, row_count, result, remark, create_time)
+        VALUES (#{tableName}, #{partitionName}, #{action}, #{boundaryTime}, #{rowCount}, #{result}, #{remark}, NOW())
+    </insert>
+
+</mapper>

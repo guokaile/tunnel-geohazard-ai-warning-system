@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.sys.mapper.PermissionMapper">
+
+    <select id="selectAll" resultType="com.tgaws.business.sys.entity.PermissionEntity">
+        SELECT id, perm_code AS permCode, perm_name AS permName, perm_type AS permType,
+               parent_id AS parentId, route, sort
+        FROM sys_permission
+        WHERE is_deleted = 0
+        ORDER BY parent_id, sort, id
+    </select>
+</mapper>

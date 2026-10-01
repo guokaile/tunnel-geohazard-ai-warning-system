@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tgaws.business.rpt.mapper.RptReportMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO rpt_report (report_no, report_type, period, file_path, status, generate_time)
+        VALUES (#{reportNo}, #{reportType}, #{period}, #{filePath}, #{status}, NOW())
+    </insert>
+
+    <select id="selectById" resultType="com.tgaws.business.rpt.entity.RptReportEntity">
+        SELECT id, report_no AS reportNo, report_type AS reportType, period,
+               file_path AS filePath, status, generate_time AS generateTime
+        FROM rpt_report WHERE id = #{id}
+    </select>
+
+    <select id="selectList" resultType="com.tgaws.business.rpt.entity.RptReportEntity">
+        SELECT id, report_no AS reportNo, report_type AS reportType, period,
+               file_path AS filePath, status, generate_time AS generateTime
+        FROM rpt_report
+        WHERE 1 = 1
+        <if test="reportType != null">
+          AND report_type = #{reportType}
+        </if>
+        <if test="period != null">
+          AND period = #{period}
+        </if>
+        ORDER BY generate_time DESC, id DESC
+    </select>
+
+</mapper>
