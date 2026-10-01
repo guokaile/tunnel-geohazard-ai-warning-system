@@ -31,7 +31,7 @@
 
 ## 快速上手（本地开发）
 
-前置要求：JDK 17、Maven 3.9（compiler 插件要求 ≥ 3.6.3）、MySQL 8、Node 18+。
+前置要求：JDK 25、Maven 3.9（compiler 插件要求 ≥ 3.6.3）、MySQL 8、Node 18+。
 
 ### 1. 初始化开发库
 
