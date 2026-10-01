@@ -1,0 +1,29 @@
+# ============ IDE / 本机 ============
+.idea/
+.vscode/
+*.iml
+
+# ============ 运行时 / 日志 ============
+.tgaws-run/
+logs/
+*.log
+
+# ============ 交付物 / 大文件（不入库）============
+部署安装包/
+reports/
+deploy/downloads/
+deploy/logs/
+deploy/staging/
+deploy/build-f3/
+
+# ============ 前端依赖与构建产物 ============
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# ============ 打包产物 ============
+*.exe
+*.msi
+*.zip
+target/
